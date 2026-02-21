@@ -53,18 +53,24 @@ export default function RegisterPage() {
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: {
-        data: {
-          firstName: form.firstName,
-          lastName: form.lastName,
-        },
-      },
+    })
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    const result = await register({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phone: form.phone,
+      password: form.password,
     })
 
-    if (data) {
+    if (result.success && data) {
       router.push("/dashboard")
     } else {
-      setError(error?.message ?? "Error en el registro")
+      setError(result.error || "Error en el registro")
     }
   }
 
