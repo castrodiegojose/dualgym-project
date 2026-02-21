@@ -5,10 +5,12 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react"
 import type { User, LoginData, RegisterData } from "./types"
-import { loginUser, registerUser, updateUser } from "./api"
+import { supabase } from "./supabaseClient"
+import { loginUser, registerUser, updateUser, getCurrentUserFromSession } from "./api"
 
 interface AuthContextType {
   user: User | null
@@ -54,8 +56,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut()
     setUser(null)
+  }, [])
+
+  useEffect(() => {
+    getCurrentUserFromSession().then((u) => {
+      if (u) setUser(u)
+    })
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const u = await getCurrentUserFromSession()
+        setUser(u ?? null)
+      } else {
+        setUser(null)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   const updateProfile = useCallback(

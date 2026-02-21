@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dumbbell, Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabaseClient"
 
 export default function RegisterPage() {
   const { register, isLoading } = useAuth()
@@ -50,15 +49,6 @@ export default function RegisterPage() {
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
-    const { data, error } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-    })
-    if (error) {
-      setError(error.message)
-      return
-    }
-
     const result = await register({
       firstName: form.firstName,
       lastName: form.lastName,
@@ -67,7 +57,7 @@ export default function RegisterPage() {
       password: form.password,
     })
 
-    if (result.success && data) {
+    if (result.success) {
       router.push("/dashboard")
     } else {
       setError(result.error || "Error en el registro")

@@ -1,119 +1,162 @@
+import { supabase } from "./supabaseClient"
 import type { User, RegisterData, LoginData } from "./types"
-
-// Simulated delay to mimic real API calls
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// In-memory store (will be replaced by real backend)
-let users: (User & { password: string })[] = [
-  {
-    id: "1",
-    firstName: "Admin",
-    lastName: "User",
-    email: "admin@dualgym.com",
-    phone: "+1 555-0100",
-    role: "admin",
-    membershipStatus: "active",
-    joinDate: "2024-01-15",
-    password: "admin123",
-  },
-  {
-    id: "2",
-    firstName: "John",
-    lastName: "Doe",
-    email: "john@example.com",
-    phone: "+1 555-0101",
-    role: "member",
-    membershipStatus: "active",
-    joinDate: "2024-06-01",
-    password: "password123",
-  },
-  {
-    id: "3",
-    firstName: "Jane",
-    lastName: "Smith",
-    email: "jane@example.com",
-    phone: "+1 555-0102",
-    role: "member",
-    membershipStatus: "inactive",
-    joinDate: "2024-03-10",
-    password: "password123",
-  },
-  {
-    id: "4",
-    firstName: "Mike",
-    lastName: "Johnson",
-    email: "mike@example.com",
-    phone: "+1 555-0103",
-    role: "member",
-    membershipStatus: "active",
-    joinDate: "2025-01-20",
-    password: "password123",
-  },
-]
 
 export async function loginUser(
   data: LoginData
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  await delay(800)
-  const found = users.find(
-    (u) => u.email === data.email && u.password === data.password
-  )
-  if (!found) {
-    return { success: false, error: "Correo o contrasena incorrectos" }
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  })
+  if (authError) {
+    return { success: false, error: authError.message }
   }
-  const { password: _, ...user } = found
-  return { success: true, user }
+  const userId = authData.user?.id
+  if (!userId) return { success: false, error: "Error al obtener sesión" }
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single()
+  if (profileError || !profile) {
+    await supabase.auth.signOut()
+    return { success: false, error: "Perfil no encontrado" }
+  }
+  return { success: true, user: profileToUser(profile) }
 }
 
 export async function registerUser(
   data: RegisterData
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  await delay(800)
-  const exists = users.find((u) => u.email === data.email)
-  if (exists) {
-    return { success: false, error: "Ya existe una cuenta con este correo" }
-  }
-  const newUser: User & { password: string } = {
-    id: String(users.length + 1),
-    firstName: data.firstName,
-    lastName: data.lastName,
+  const { data: authData, error: signUpError } = await supabase.auth.signUp({
     email: data.email,
-    phone: data.phone,
-    role: "member",
-    membershipStatus: "active",
-    joinDate: new Date().toISOString().split("T")[0],
     password: data.password,
+    options: {
+      data: {
+        first_name: data.firstName,
+        last_name: data.lastName,
+        phone: data.phone,
+      },
+    },
+  })
+  if (signUpError) {
+    return { success: false, error: signUpError.message }
   }
-  users.push(newUser)
-  const { password: _, ...user } = newUser
-  return { success: true, user }
+  const userId = authData.user?.id
+  if (!userId) return { success: false, error: "Error al crear la cuenta" }
+  const profile = await fetchProfileWithRetry(userId, 5)
+  if (!profile) {
+    await supabase.auth.signOut()
+    return { success: false, error: "Perfil no creado. Intenta de nuevo." }
+  }
+  return { success: true, user: profileToUser(profile) }
+}
+
+type ProfileRow = {
+  id: string
+  email: string | null
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  role: string
+  membership_status: string
+  avatar_url?: string | null
+  created_at: string
+  [key: string]: unknown
+}
+
+async function fetchProfileWithRetry(
+  userId: string,
+  maxAttempts: number
+): Promise<ProfileRow | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single()
+    if (!error && data) return data as ProfileRow
+    await new Promise((r) => setTimeout(r, 400 * (i + 1)))
+  }
+  return null
+}
+
+function userToProfilePatch(data: Partial<User>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {}
+  if (data.firstName !== undefined) patch.first_name = data.firstName
+  if (data.lastName !== undefined) patch.last_name = data.lastName
+  if (data.email !== undefined) patch.email = data.email
+  if (data.phone !== undefined) patch.phone = data.phone
+  if (data.role !== undefined) patch.role = data.role
+  if (data.membershipStatus !== undefined) patch.membership_status = data.membershipStatus
+  if (data.avatarUrl !== undefined) patch.avatar_url = data.avatarUrl
+  return patch
 }
 
 export async function updateUser(
   id: string,
   data: Partial<User>
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  await delay(600)
-  const index = users.findIndex((u) => u.id === id)
-  if (index === -1) {
-    return { success: false, error: "Usuario no encontrado" }
+  const patch = userToProfilePatch(data)
+  if (Object.keys(patch).length === 0) {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .single()
+    if (error || !profile) return { success: false, error: "Usuario no encontrado" }
+    return { success: true, user: profileToUser(profile) }
   }
-  users[index] = { ...users[index], ...data }
-  const { password: _, ...user } = users[index]
-  return { success: true, user }
+  const { data: updated, error } = await supabase
+    .from("profiles")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) return { success: false, error: error.message }
+  if (!updated) return { success: false, error: "Usuario no encontrado" }
+  return { success: true, user: profileToUser(updated) }
+}
+
+function profileToUser(row: ProfileRow): User {
+  return {
+    id: row.id,
+    firstName: row.first_name ?? "",
+    lastName: row.last_name ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    role: row.role === "admin" ? "admin" : "member",
+    membershipStatus: row.membership_status === "active" ? "active" : "inactive",
+    joinDate: row.created_at?.split("T")[0] ?? new Date().toISOString().split("T")[0],
+    avatarUrl: row.avatar_url ?? undefined,
+  }
+}
+
+/** Devuelve el User actual si hay sesión de Supabase (para restaurar al recargar). */
+export async function getCurrentUserFromSession(): Promise<User | null> {
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (!authUser?.id) return null
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", authUser.id)
+    .single()
+  if (error || !profile) return null
+  return profileToUser(profile)
 }
 
 export async function getAllUsers(): Promise<User[]> {
-  await delay(500)
-  return users.map(({ password: _, ...user }) => user)
+  const { data, error } = await supabase.from("profiles").select("*")
+  if (error) throw error
+  return (data ?? []).map(profileToUser)
 }
 
-export async function getUserById(
-  id: string
-): Promise<User | null> {
-  await delay(300)
-  const found = users.find((u) => u.id === id)
-  if (!found) return null
-  const { password: _, ...user } = found
-  return user
+export async function getUserById(id: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", id)
+    .single()
+  if (error || !data) return null
+  return profileToUser(data)
 }

@@ -117,18 +117,9 @@ export default function LoginPage() {
                 </Link>
               </p>
 
-              {/* Demo credentials hint */}
-              <div className="mt-2 rounded-lg border border-border bg-muted/50 p-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Cuentas de Prueba:
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Admin: admin@dualgym.com / admin123
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Member: john@example.com / password123
-                </p>
-              </div>
+              <p className="mt-4 text-center text-xs text-muted-foreground">
+                El superadmin es cualquier usuario con role &quot;admin&quot; en la tabla profiles (Supabase). Inicia sesión con ese correo y contraseña.
+              </p>
             </form>
           </CardContent>
         </Card>
