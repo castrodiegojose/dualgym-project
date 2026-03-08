@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dumbbell, Loader2 } from "lucide-react"
+import { Dumbbell, Eye, EyeOff, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const { login, isLoading, isAuthenticated, isSessionReady } = useAuth()
   const router = useRouter()
   const [error, setError] = useState("")
   const [form, setForm] = useState({ email: "", password: "" })
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (!isSessionReady || !isAuthenticated) return
@@ -93,15 +94,30 @@ export default function LoginPage() {
                     Olvidaste tu contrasena?
                   </button>
                 </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Ingresa tu contrasena"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, password: e.target.value }))
-                  }
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Ingresa tu contrasena"
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, password: e.target.value }))
+                    }
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((p) => !p)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
+                    aria-label={showPassword ? "Ocultar contrasena" : "Ver contrasena"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <Button type="submit" className="mt-2 w-full font-semibold" disabled={isLoading}>
