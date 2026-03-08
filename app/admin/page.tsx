@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
@@ -8,17 +9,30 @@ import { getAllUsers } from "@/lib/api"
 import type { User } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   Search,
   Users,
   UserCheck,
   UserX,
   X,
+  UserCircle,
+  BarChart3,
 } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 
 function AdminContent() {
+  const { user: authUser } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [search, setSearch] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -44,16 +58,26 @@ function AdminContent() {
       <Navbar />
       <main className="flex-1 py-8">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
-          <div className="mb-8">
-            <h1
-              className="text-3xl font-bold tracking-tight md:text-4xl"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              PANEL DE <span className="text-primary">ADMINISTRACION</span>
-            </h1>
-            <p className="mt-2 text-muted-foreground">
-              Administra los miembros del gimnasio y consulta todas las cuentas
-            </p>
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1
+                className="text-3xl font-bold tracking-tight md:text-4xl"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
+                PANEL DE <span className="text-primary">ADMINISTRACION</span>
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Administra los miembros del gimnasio y consulta todas las cuentas
+              </p>
+            </div>
+            {authUser?.role === "superadmin" && (
+              <Button variant="outline" asChild>
+                <Link href="/admin/reportes" className="gap-2">
+                  <BarChart3 className="size-4" />
+                  Reportes
+                </Link>
+              </Button>
+            )}
           </div>
 
           {/* Stats */}
@@ -113,48 +137,89 @@ function AdminContent() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-col gap-2">
-                    {filtered.length === 0 && (
-                      <p className="py-8 text-center text-sm text-muted-foreground">
-                        No se encontraron miembros
-                      </p>
-                    )}
-                    {filtered.map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => setSelectedUser(u)}
-                        className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:border-primary/40 hover:bg-secondary/50 ${
-                          selectedUser?.id === u.id
-                            ? "border-primary/40 bg-secondary/50"
-                            : "border-border/50"
-                        }`}
-                      >
-                        <Avatar className="size-10 shrink-0">
-                          <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
-                            {u.firstName[0]}
-                            {u.lastName[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">
-                            {u.firstName} {u.lastName}
-                          </p>
-                          <p className="truncate text-sm text-muted-foreground">
-                            {u.email}
-                          </p>
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            u.membershipStatus === "active"
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-muted text-muted-foreground"
-                          }
-                        >
-                          {u.membershipStatus}
-                        </Badge>
-                      </button>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuario</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Telefono</TableHead>
+                          <TableHead>Estado Membresia</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="py-8 text-center text-sm text-muted-foreground"
+                            >
+                              No se encontraron miembros
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {filtered.map((u) => (
+                          <TableRow
+                            key={u.id}
+                            className={
+                              selectedUser?.id === u.id
+                                ? "bg-secondary/50"
+                                : undefined
+                            }
+                          >
+                            <TableCell>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUser(u)}
+                                className="flex items-center gap-3 text-left hover:opacity-80"
+                              >
+                                <Avatar className="size-8 shrink-0">
+                                  <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                                    {u.firstName[0]}
+                                    {u.lastName[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">
+                                  {u.firstName} {u.lastName}
+                                </span>
+                              </button>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {u.email}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {u.phone || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  u.membershipStatus === "active"
+                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                    : "bg-muted text-muted-foreground"
+                                }
+                              >
+                                {u.membershipStatus === "active"
+                                  ? "Activa"
+                                  : "Inactiva"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link
+                                  href={`/admin/usuarios/${u.id}`}
+                                  className="inline-flex items-center gap-1.5"
+                                >
+                                  <UserCircle className="size-4" />
+                                  Ver Perfil
+                                </Link>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
@@ -13,26 +13,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dumbbell, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth()
+  const { login, isLoading, isAuthenticated, isSessionReady } = useAuth()
   const router = useRouter()
   const [error, setError] = useState("")
   const [form, setForm] = useState({ email: "", password: "" })
 
+  useEffect(() => {
+    if (!isSessionReady || !isAuthenticated) return
+    const t = setTimeout(() => {
+      router.replace("/dashboard")
+      router.refresh()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [isSessionReady, isAuthenticated, router])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-
     if (!form.email || !form.password) {
       setError("Por favor completa todos los campos")
       return
     }
-
     const result = await login(form)
     if (result.success) {
-      router.push("/dashboard")
-    } else {
-      setError(result.error || "Error al iniciar sesion")
+      router.replace("/dashboard")
+      router.refresh()
+      return
     }
+    setError(result.error || "Error al iniciar sesion")
   }
 
   return (

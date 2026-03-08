@@ -16,10 +16,14 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
+  /** False hasta terminar la primera comprobación de sesión (evita redirigir a login antes de saber si hay sesión). */
+  isSessionReady: boolean
   login: (data: LoginData) => Promise<{ success: boolean; error?: string }>
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   updateProfile: (data: Partial<User>) => Promise<{ success: boolean; error?: string }>
+  /** Relee la sesión de Supabase y actualiza user (útil al montar rutas protegidas). */
+  refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -27,17 +31,61 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSessionReady, setIsSessionReady] = useState(false)
+
+  const LOGIN_TIMEOUT_MS = 25_000
 
   const login = useCallback(async (data: LoginData) => {
+    if (typeof window !== "undefined") {
+      console.log("[Auth] login(): inicio, setIsLoading(true)")
+    }
     setIsLoading(true)
     try {
-      const result = await loginUser(data)
+      const result = await new Promise<Awaited<ReturnType<typeof loginUser>>>(
+        (resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error("La solicitud tardó demasiado. Revisa tu conexión e intenta de nuevo.")),
+            LOGIN_TIMEOUT_MS
+          )
+          loginUser(data)
+            .then((r) => {
+              clearTimeout(timer)
+              resolve(r)
+            })
+            .catch((err) => {
+              clearTimeout(timer)
+              reject(err)
+            })
+        }
+      )
+      if (typeof window !== "undefined") {
+        console.log("[Auth] login(): respuesta de loginUser", {
+          success: result.success,
+          hasUser: !!result.user,
+          error: result.error,
+        })
+      }
       if (result.success && result.user) {
+        if (typeof window !== "undefined") {
+          console.log("[Auth] login(): setUser(result.user), estado actualizado")
+        }
         setUser(result.user)
         return { success: true }
       }
       return { success: false, error: result.error }
+    } catch (err) {
+      if (typeof window !== "undefined") {
+        console.log("[Auth] login(): catch", { error: err })
+      }
+      return {
+        success: false,
+        error:
+          err instanceof Error ? err.message : "Error al conectar. Revisa tu red e intenta de nuevo.",
+      }
     } finally {
+      if (typeof window !== "undefined") {
+        console.log("[Auth] login(): finally, setIsLoading(false)")
+      }
       setIsLoading(false)
     }
   }, [])
@@ -51,6 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true }
       }
       return { success: false, error: result.error }
+    } catch (err) {
+      return {
+        success: false,
+        error:
+          err instanceof Error ? err.message : "Error al conectar. Revisa tu red e intenta de nuevo.",
+      }
     } finally {
       setIsLoading(false)
     }
@@ -61,21 +115,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const refreshSession = useCallback(async () => {
+    const u = await getCurrentUserFromSession()
+    setUser(u ?? null)
+  }, [])
+
   useEffect(() => {
-    getCurrentUserFromSession().then((u) => {
-      if (u) setUser(u)
-    })
+    let cancelled = false
+    if (typeof window !== "undefined") {
+      console.log("[Auth] useEffect: comprobando sesión inicial (getCurrentUserFromSession)")
+    }
+    getCurrentUserFromSession()
+      .then((u) => {
+        if (!cancelled) {
+          if (typeof window !== "undefined") {
+            console.log("[Auth] sesión inicial:", u ? { id: u.id, email: u.email } : "sin usuario")
+          }
+          setUser(u ?? null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          if (typeof window !== "undefined") {
+            console.log("[Auth] setIsSessionReady(true)")
+          }
+          setIsSessionReady(true)
+        }
+      })
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (typeof window !== "undefined") {
+        console.log("[Auth] onAuthStateChange", { event, hasSession: !!session?.user })
+      }
       if (session?.user) {
         const u = await getCurrentUserFromSession()
-        setUser(u ?? null)
+        if (!cancelled) setUser(u ?? null)
       } else {
-        setUser(null)
+        if (!cancelled) setUser(null)
       }
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const updateProfile = useCallback(
@@ -102,10 +185,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: !!user,
         isLoading,
+        isSessionReady,
         login,
         register,
         logout,
         updateProfile,
+        refreshSession,
       }}
     >
       {children}

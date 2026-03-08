@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
-import { Dumbbell, Menu, X, LogOut, User, LayoutDashboard, Shield } from "lucide-react"
+import { Dumbbell, Menu, X, LogOut, User, LayoutDashboard, Shield, BarChart3 } from "lucide-react"
 import { useState } from "react"
 
 export function Navbar() {
@@ -36,11 +36,19 @@ export function Navbar() {
                   Perfil
                 </Link>
               </Button>
-              {user?.role === "admin" && (
+              {(user?.role === "admin" || user?.role === "superadmin") && (
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/admin">
                     <Shield className="size-4" />
                     Admin
+                  </Link>
+                </Button>
+              )}
+              {user?.role === "superadmin" && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/admin/reportes">
+                    <BarChart3 className="size-4" />
+                    Reportes
                   </Link>
                 </Button>
               )}
@@ -89,11 +97,19 @@ export function Navbar() {
                     Perfil
                   </Link>
                 </Button>
-                {user?.role === "admin" && (
+                {(user?.role === "admin" || user?.role === "superadmin") && (
                   <Button variant="ghost" className="justify-start" asChild onClick={() => setMobileOpen(false)}>
                     <Link href="/admin">
                       <Shield className="size-4" />
                       Admin
+                    </Link>
+                  </Button>
+                )}
+                {user?.role === "superadmin" && (
+                  <Button variant="ghost" className="justify-start" asChild onClick={() => setMobileOpen(false)}>
+                    <Link href="/admin/reportes">
+                      <BarChart3 className="size-4" />
+                      Reportes
                     </Link>
                   </Button>
                 )}
