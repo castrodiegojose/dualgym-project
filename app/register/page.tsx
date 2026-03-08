@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dumbbell, Loader2 } from "lucide-react"
 
 export default function RegisterPage() {
-  const { register, isLoading } = useAuth()
+  const { register, isLoading, isAuthenticated, isSessionReady } = useAuth()
   const router = useRouter()
   const [error, setError] = useState("")
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -57,12 +57,16 @@ export default function RegisterPage() {
       password: form.password,
     })
 
-    if (result.success) {
-      router.push("/dashboard")
-    } else {
+    if (!result.success) {
       setError(result.error || "Error en el registro")
     }
   }
+
+  useEffect(() => {
+    if (isSessionReady && isAuthenticated) {
+      router.replace("/dashboard")
+    }
+  }, [isSessionReady, isAuthenticated, router])
 
   function handleChange(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
