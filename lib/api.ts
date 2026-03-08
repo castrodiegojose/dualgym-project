@@ -9,19 +9,11 @@ import type {
   SubscriptionStatus,
 } from "./types"
 
-const LOG = (msg: string, data?: unknown) => {
-  if (typeof window !== "undefined") {
-    console.log(`[Auth] ${msg}`, data ?? "")
-  }
-}
-
 const SIGN_IN_WAIT_MS = 8000
 
 export async function loginUser(
   data: LoginData
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  LOG("loginUser: llamando signInWithPassword", { email: data.email })
-
   let resolveFromEvent: (payload: { userId: string; accessToken: string } | null) => void
   const eventPayloadPromise = new Promise<{ userId: string; accessToken: string } | null>((r) => {
     resolveFromEvent = r
@@ -29,7 +21,6 @@ export async function loginUser(
 
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" && session?.user?.id && session?.access_token) {
-      LOG("loginUser: onAuthStateChange SIGNED_IN, usando session.user.id", { userId: session.user.id })
       subscription.unsubscribe()
       resolveFromEvent({ userId: session.user.id, accessToken: session.access_token })
     }
@@ -55,25 +46,18 @@ export async function loginUser(
 
   if (result.type === "signIn") {
     const { data: authData, error: authError } = result
-    if (authError) {
-      LOG("loginUser: Supabase auth error", { message: authError.message, code: authError.name })
-      return { success: false, error: authError.message }
-    }
+    if (authError) return { success: false, error: authError.message }
     userId = authData.user?.id
     accessToken = authData.session?.access_token
-    LOG("loginUser: Supabase respondió OK (promesa)", { userId })
   } else if (result.type === "event" && result.payload) {
     userId = result.payload.userId
     accessToken = result.payload.accessToken
-    LOG("loginUser: userId y token desde onAuthStateChange", { userId })
   } else {
-    LOG("loginUser: timeout sin userId")
     return { success: false, error: "La solicitud tardó demasiado. Revisa tu conexión e intenta de nuevo." }
   }
 
   if (!userId) return { success: false, error: "Error al obtener sesión" }
 
-  LOG("loginUser: obteniendo perfil vía API (servidor)", { userId })
   const PROFILE_FETCH_MS = 12_000
   let profile: ProfileRow | null = null
   let profileError: string | null = null
@@ -92,32 +76,26 @@ export async function loginUser(
       const data = await res.json()
       if (!res.ok) {
         profileError = data.error ?? res.statusText
-        LOG("loginUser: API profile error", { status: res.status, error: profileError })
       } else {
         profile = data as ProfileRow
-        LOG("loginUser: perfil desde API", { id: profile.id, email: profile.email })
       }
     } catch (err) {
-      LOG("loginUser: error llamando API profile", { error: err })
       profileError = err instanceof Error ? err.message : "Error al cargar el perfil."
     }
   }
 
   if (!profile) {
     if (!accessToken) {
-      LOG("loginUser: sin accessToken, intentando perfil directo desde cliente")
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
       profile = data as ProfileRow | null
       profileError = error?.message ?? null
     }
     if (profileError || !profile) {
-      LOG("loginUser: error al cargar perfil", { error: profileError })
       await supabase.auth.signOut()
       return { success: false, error: profileError ?? "Perfil no encontrado" }
     }
   }
 
-  LOG("loginUser: perfil cargado, retornando success", { userId, email: profile?.email })
   return { success: true, user: profileToUser(profile) }
 }
 
