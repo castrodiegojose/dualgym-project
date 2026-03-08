@@ -1,4 +1,4 @@
-import { Dumbbell, Mail, Phone, MapPin } from "lucide-react"
+import { Dumbbell, Mail, Phone, MapPin, Instagram } from "lucide-react"
 import Link from "next/link"
 
 export function Footer() {
@@ -41,16 +41,25 @@ export function Footer() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-sm text-foreground/80">
                 <MapPin className="size-4 shrink-0 text-primary" />
-                123 Fitness Ave, Gym City, GC 10001
+                Santa Rita 72, Chamical, La Rioja, Argentina
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground/80">
                 <Phone className="size-4 shrink-0 text-primary" />
-                +1 (555) 123-4567
+                +54 9 (3826) 40-1746
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground/80">
                 <Mail className="size-4 shrink-0 text-primary" />
-                info@dualgym.com
+                dualgym105@gmail.com
               </div>
+              <a
+                href="https://www.instagram.com/dual_gym?igsh=MXhoYm8wZ2E2ZXgydg=="
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-foreground/80 transition-colors hover:text-primary"
+              >
+                <Instagram className="size-4 shrink-0 text-primary" />
+                @dualgym
+              </a>
             </div>
           </div>
         </div>
