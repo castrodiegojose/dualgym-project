@@ -126,6 +126,94 @@ export async function registerUser(
   return { success: true, user: profileToUser(profile) }
 }
 
+export async function createAdminUser(params: {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  password: string
+}): Promise<{ success: boolean; error?: string }> {
+  // Crea un usuario de Supabase Auth y luego ajusta el perfil a rol "admin"
+  const { data: authData, error: signUpError } = await supabase.auth.signUp({
+    email: params.email,
+    password: params.password,
+    options: {
+      data: {
+        first_name: params.firstName,
+        last_name: params.lastName,
+        phone: params.phone,
+      },
+    },
+  })
+  if (signUpError) {
+    return { success: false, error: signUpError.message }
+  }
+  const userId = authData.user?.id
+  if (!userId) return { success: false, error: "Error al crear la cuenta de administrador" }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({
+      first_name: params.firstName,
+      last_name: params.lastName,
+      phone: params.phone,
+      role: "admin",
+    })
+    .eq("id", userId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  return { success: true }
+}
+
+export async function createMember(params: {
+  numeroSocio?: string | null
+  dni: string
+  firstName: string
+  lastName: string
+  telefono?: string | null
+  celular?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  fechaIngreso?: string | null
+}): Promise<{ success: boolean; error?: string }> {
+  const { data: existing, error: existingError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("dni", params.dni.trim())
+    .maybeSingle()
+
+  if (existingError) {
+    return { success: false, error: existingError.message }
+  }
+  if (existing) {
+    return { success: false, error: "Ya existe un miembro con este DNI." }
+  }
+
+  const { error: insertError } = await supabase.from("profiles").insert({
+    numero_socio: params.numeroSocio ?? null,
+    dni: params.dni.trim(),
+    first_name: params.firstName.trim(),
+    last_name: params.lastName.trim(),
+    phone: params.telefono ?? params.celular ?? null,
+    direccion: params.direccion ?? null,
+    localidad: params.localidad ?? null,
+    provincia: params.provincia ?? null,
+    fecha_ingreso: params.fechaIngreso ?? new Date().toISOString().split("T")[0],
+    role: "member",
+    membership_status: "inactive",
+  })
+
+  if (insertError) {
+    return { success: false, error: insertError.message }
+  }
+
+  return { success: true }
+}
+
 type ProfileRow = {
   id: string
   email: string | null
@@ -136,6 +224,14 @@ type ProfileRow = {
   membership_status: string
   avatar_url?: string | null
   created_at: string
+  /** Campos de migración / gestión de socios */
+  numero_socio?: string | null
+  dni?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  fecha_nacimiento?: string | null
+  fecha_ingreso?: string | null
   [key: string]: unknown
 }
 
@@ -161,6 +257,13 @@ function userToProfilePatch(data: Partial<User>): Record<string, unknown> {
   if (data.lastName !== undefined) patch.last_name = data.lastName
   if (data.email !== undefined) patch.email = data.email
   if (data.phone !== undefined) patch.phone = data.phone
+  if (data.numeroSocio !== undefined) patch.numero_socio = data.numeroSocio
+  if (data.dni !== undefined) patch.dni = data.dni
+  if (data.direccion !== undefined) patch.direccion = data.direccion
+  if (data.localidad !== undefined) patch.localidad = data.localidad
+  if (data.provincia !== undefined) patch.provincia = data.provincia
+  if (data.fechaNacimiento !== undefined) patch.fecha_nacimiento = data.fechaNacimiento
+  if (data.fechaIngreso !== undefined) patch.fecha_ingreso = data.fechaIngreso
   if (data.role !== undefined) patch.role = data.role
   if (data.membershipStatus !== undefined) patch.membership_status = data.membershipStatus
   if (data.avatarUrl !== undefined) patch.avatar_url = data.avatarUrl
@@ -199,6 +302,13 @@ function profileToUser(row: ProfileRow): User {
     lastName: row.last_name ?? "",
     email: row.email ?? "",
     phone: row.phone ?? "",
+    numeroSocio: row.numero_socio ?? null,
+    dni: row.dni ?? null,
+    direccion: row.direccion ?? null,
+    localidad: row.localidad ?? null,
+    provincia: row.provincia ?? null,
+    fechaNacimiento: row.fecha_nacimiento ?? null,
+    fechaIngreso: row.fecha_ingreso ?? null,
     role:
       row.role === "superadmin"
         ? "superadmin"

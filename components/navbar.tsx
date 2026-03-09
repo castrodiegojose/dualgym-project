@@ -62,9 +62,6 @@ export function Navbar() {
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/login">Iniciar Sesion</Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/register">Registrarse</Link>
-              </Button>
             </>
           )}
         </div>
@@ -122,9 +119,6 @@ export function Navbar() {
               <>
                 <Button variant="ghost" className="justify-start" asChild onClick={() => setMobileOpen(false)}>
                   <Link href="/login">Iniciar Sesion</Link>
-                </Button>
-                <Button className="justify-start" asChild onClick={() => setMobileOpen(false)}>
-                  <Link href="/register">Registrarse</Link>
                 </Button>
               </>
             )}

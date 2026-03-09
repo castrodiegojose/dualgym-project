@@ -5,7 +5,7 @@ import Link from "next/link"
 import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
-import { getAllUsers } from "@/lib/api"
+import { getAllUsers, createMember } from "@/lib/api"
 import type { User } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -36,6 +36,21 @@ function AdminContent() {
   const [users, setUsers] = useState<User[]>([])
   const [search, setSearch] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState("")
+  const [createSuccess, setCreateSuccess] = useState("")
+  const [memberForm, setMemberForm] = useState({
+    numeroSocio: "",
+    dni: "",
+    firstName: "",
+    lastName: "",
+    telefono: "",
+    celular: "",
+    direccion: "",
+    localidad: "",
+    provincia: "",
+    fechaIngreso: "",
+  })
 
   useEffect(() => {
     getAllUsers().then(setUsers)
@@ -46,7 +61,8 @@ function AdminContent() {
     return (
       u.firstName.toLowerCase().includes(q) ||
       u.lastName.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q)
+      (u.email ?? "").toLowerCase().includes(q) ||
+      (u.dni ?? "").toLowerCase().includes(q)
     )
   })
 
@@ -113,6 +129,205 @@ function AdminContent() {
                   <p className="text-2xl font-bold">{inactiveCount}</p>
                   <p className="text-sm text-muted-foreground">Inactivos</p>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Crear miembro */}
+          <div className="mb-8">
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle>Agregar miembro</CardTitle>
+                <CardDescription>
+                  Alta manual de un socio común (rol miembro).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {createError && (
+                  <div className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {createError}
+                  </div>
+                )}
+                {createSuccess && (
+                  <div className="mb-3 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">
+                    {createSuccess}
+                  </div>
+                )}
+                <form
+                  className="grid gap-3 md:grid-cols-3"
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    setCreateError("")
+                    setCreateSuccess("")
+                    if (!memberForm.dni.trim()) {
+                      setCreateError("El DNI es obligatorio.")
+                      return
+                    }
+                    if (!memberForm.firstName.trim() || !memberForm.lastName.trim()) {
+                      setCreateError("Nombre y apellido son obligatorios.")
+                      return
+                    }
+                    setCreating(true)
+                    const result = await createMember({
+                      numeroSocio: memberForm.numeroSocio.trim() || null,
+                      dni: memberForm.dni.trim(),
+                      firstName: memberForm.firstName.trim(),
+                      lastName: memberForm.lastName.trim(),
+                      telefono: memberForm.telefono.trim() || null,
+                      celular: memberForm.celular.trim() || null,
+                      direccion: memberForm.direccion.trim() || null,
+                      localidad: memberForm.localidad.trim() || null,
+                      provincia: memberForm.provincia.trim() || null,
+                      fechaIngreso: memberForm.fechaIngreso || null,
+                    })
+                    setCreating(false)
+                    if (!result.success) {
+                      setCreateError(result.error || "No se pudo crear el miembro.")
+                      return
+                    }
+                    setCreateSuccess("Miembro creado correctamente.")
+                    setMemberForm({
+                      numeroSocio: "",
+                      dni: "",
+                      firstName: "",
+                      lastName: "",
+                      telefono: "",
+                      celular: "",
+                      direccion: "",
+                      localidad: "",
+                      provincia: "",
+                      fechaIngreso: "",
+                    })
+                    getAllUsers().then(setUsers).catch(() => {})
+                  }}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Número de socio
+                    </label>
+                    <Input
+                      value={memberForm.numeroSocio}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, numeroSocio: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      DNI *
+                    </label>
+                    <Input
+                      value={memberForm.dni}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, dni: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Nombre *
+                    </label>
+                    <Input
+                      value={memberForm.firstName}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, firstName: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Apellido *
+                    </label>
+                    <Input
+                      value={memberForm.lastName}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, lastName: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Teléfono
+                    </label>
+                    <Input
+                      value={memberForm.telefono}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, telefono: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Celular
+                    </label>
+                    <Input
+                      value={memberForm.celular}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, celular: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Dirección
+                    </label>
+                    <Input
+                      value={memberForm.direccion}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, direccion: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Localidad
+                    </label>
+                    <Input
+                      value={memberForm.localidad}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, localidad: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Provincia
+                    </label>
+                    <Input
+                      value={memberForm.provincia}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, provincia: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Fecha de ingreso
+                    </label>
+                    <Input
+                      type="date"
+                      value={memberForm.fechaIngreso}
+                      onChange={(e) =>
+                        setMemberForm((p) => ({ ...p, fechaIngreso: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      type="submit"
+                      className="w-full sm:w-auto"
+                      disabled={creating}
+                    >
+                      {creating ? (
+                        <>
+                          <span className="mr-1">Guardando...</span>
+                        </>
+                      ) : (
+                        "Guardar miembro"
+                      )}
+                    </Button>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </div>
