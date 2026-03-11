@@ -28,8 +28,6 @@ export async function POST(request: Request) {
     .eq("dni", dni.trim())
     .maybeSingle()
 
-  console.log(profile)
-
   if (error) {
     return NextResponse.json(
       { error: "Error al buscar el DNI. Intenta de nuevo." },
@@ -44,7 +42,7 @@ export async function POST(request: Request) {
     )
   }
 
-  if (profile.rol && profile.rol !== "user") {
+  if (profile.role === "admin" || profile.role === "superadmin") {
     return NextResponse.json(
       { error: "Este DNI pertenece a un administrador. Usa el login de administrador." },
       { status: 403 },
