@@ -10,11 +10,13 @@ import {
   getAllSubscriptions,
   getAllPayments,
   getPlans,
+  createAdminUser,
 } from "@/lib/api"
 import type { User, Subscription, Payment, Plan } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -72,6 +74,18 @@ function ReportesContent() {
   const [filterEstado, setFilterEstado] = useState<string>("todos")
   const [filterPlanId, setFilterPlanId] = useState<string>("todos")
   const [filterVencimiento, setFilterVencimiento] = useState<string>("todos")
+
+  const [adminForm, setAdminForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+  })
+  const [adminError, setAdminError] = useState<string>("")
+  const [adminSuccess, setAdminSuccess] = useState<string>("")
+  const [creatingAdmin, setCreatingAdmin] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -183,6 +197,52 @@ function ReportesContent() {
     }
   }, [subscriptions, payments, today])
 
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAdminError("")
+    setAdminSuccess("")
+    if (!adminForm.firstName.trim() || !adminForm.lastName.trim()) {
+      setAdminError("Nombre y apellido son obligatorios.")
+      return
+    }
+    if (!adminForm.email.trim()) {
+      setAdminError("El correo es obligatorio.")
+      return
+    }
+    if (!adminForm.password || adminForm.password.length < 6) {
+      setAdminError("La contraseña debe tener al menos 6 caracteres.")
+      return
+    }
+    if (adminForm.password !== adminForm.confirmPassword) {
+      setAdminError("Las contraseñas no coinciden.")
+      return
+    }
+    setCreatingAdmin(true)
+    const result = await createAdminUser({
+      firstName: adminForm.firstName.trim(),
+      lastName: adminForm.lastName.trim(),
+      email: adminForm.email.trim(),
+      phone: adminForm.phone.trim(),
+      password: adminForm.password,
+    })
+    setCreatingAdmin(false)
+    if (!result.success) {
+      setAdminError(result.error || "No se pudo crear el administrador.")
+      return
+    }
+    setAdminSuccess("Administrador creado correctamente.")
+    setAdminForm({
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+    })
+    // refrescamos lista de usuarios para que aparezca el nuevo admin
+    getAllUsers().then(setUsers).catch(() => {})
+  }
+
   const rows = useMemo(() => {
     return users.map((user) => {
       const sub = currentOrLatestSubscription(user.id)
@@ -260,6 +320,113 @@ function ReportesContent() {
                 Vista global de usuarios, membresías y pagos
               </p>
             </div>
+          </div>
+
+          {/* Gestión de administradores (solo superadmin, ya protegido por AuthGuard) */}
+          <div className="mb-8 grid gap-6 lg:grid-cols-2">
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle>Crear administrador</CardTitle>
+                <CardDescription>
+                  Alta manual de nuevos administradores del sistema.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateAdmin} className="flex flex-col gap-3">
+                  {adminError && (
+                    <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {adminError}
+                    </div>
+                  )}
+                  {adminSuccess && (
+                    <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">
+                      {adminSuccess}
+                    </div>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="admin-firstName">Nombre</Label>
+                      <Input
+                        id="admin-firstName"
+                        value={adminForm.firstName}
+                        onChange={(e) =>
+                          setAdminForm((p) => ({ ...p, firstName: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="admin-lastName">Apellido</Label>
+                      <Input
+                        id="admin-lastName"
+                        value={adminForm.lastName}
+                        onChange={(e) =>
+                          setAdminForm((p) => ({ ...p, lastName: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="admin-email">Correo electrónico</Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      value={adminForm.email}
+                      onChange={(e) =>
+                        setAdminForm((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="admin-phone">Teléfono</Label>
+                    <Input
+                      id="admin-phone"
+                      value={adminForm.phone}
+                      onChange={(e) =>
+                        setAdminForm((p) => ({ ...p, phone: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="admin-password">Contraseña</Label>
+                      <Input
+                        id="admin-password"
+                        type="password"
+                        value={adminForm.password}
+                        onChange={(e) =>
+                          setAdminForm((p) => ({ ...p, password: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="admin-confirm">Confirmar contraseña</Label>
+                      <Input
+                        id="admin-confirm"
+                        type="password"
+                        value={adminForm.confirmPassword}
+                        onChange={(e) =>
+                          setAdminForm((p) => ({ ...p, confirmPassword: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    className="mt-1 w-full sm:w-auto"
+                    disabled={creatingAdmin}
+                  >
+                    {creatingAdmin ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Creando administrador...
+                      </>
+                    ) : (
+                      "Crear administrador"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Dashboard de métricas */}

@@ -38,13 +38,10 @@ export function HeroSection() {
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Button size="lg" className="h-12 px-8 text-base font-semibold" asChild>
-              <Link href="/register">
-                Registrarse
+              <Link href="/login">
+                Ingresar
                 <ArrowRight className="size-5" />
               </Link>
-            </Button>
-            <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild>
-              <Link href="/login">Iniciar Sesion</Link>
             </Button>
           </div>
         </div>

@@ -10,12 +10,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formSchemaMemberDni } from "@/lib/validations"
 import { Dumbbell, Eye, EyeOff, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
-  const { login, isLoading, isAuthenticated, isSessionReady } = useAuth()
+  const { login, loginSocio, isLoading, isAuthenticated, isSessionReady } = useAuth()
   const router = useRouter()
   const [error, setError] = useState("")
+  const [dniError, setDniError] = useState<string | null>(null)
+  const [modo, setModo] = useState<"socio" | "admin">("socio")
+  const [dni, setDni] = useState("")
   const [form, setForm] = useState({ email: "", password: "" })
   const [showPassword, setShowPassword] = useState(false)
 
@@ -31,6 +35,30 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
+    if (modo === "socio") {
+      setDniError(null)
+      if (!dni.trim()) {
+        setError("Ingresa tu DNI")
+        return
+      }
+      const dniResult = formSchemaMemberDni.safeParse({ dni: dni.trim() })
+      console.log(dniResult)
+      if (!dniResult.success) {
+        const msg = dniResult.error.errors[0]?.message ?? "DNI inválido."
+        setDniError(msg)
+        setError(msg)
+        return
+      }
+      const result = await loginSocio(dniResult.data.dni)
+      if (result.success) {
+        router.replace("/dashboard")
+        router.refresh()
+        return
+      }
+      setError(result.error || "Error al iniciar sesion")
+      return
+    }
+
     if (!form.email || !form.password) {
       setError("Por favor completa todos los campos")
       return
@@ -71,54 +99,97 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email">Correo Electronico</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="john@example.com"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                />
+              <div className="flex rounded-lg border border-border/50 bg-muted/40 p-1 text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => { setModo("socio"); setError(""); setDniError(null) }}
+                  className={`flex-1 rounded-md px-3 py-2 ${modo === "socio" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                >
+                  Ingresar como socio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setModo("admin"); setError(""); setDniError(null) }}
+                  className={`flex-1 rounded-md px-3 py-2 ${modo === "admin" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                >
+                  Ingresar como administrador
+                </button>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Contrasena</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-primary"
-                  >
-                    Olvidaste tu contrasena?
-                  </button>
-                </div>
-                <div className="relative">
+              {modo === "socio" ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="dni">DNI</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Ingresa tu contrasena"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, password: e.target.value }))
-                    }
-                    className="pr-10"
+                    id="dni"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="7 u 8 dígitos"
+                    value={dni}
+                    onChange={(e) => {
+                      setDni(e.target.value)
+                      if (dniError) setDniError(null)
+                      if (error) setError("")
+                    }}
+                    maxLength={8}
+                    className={dniError ? "border-destructive" : undefined}
+                    autoComplete="off"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((p) => !p)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
-                    aria-label={showPassword ? "Ocultar contrasena" : "Ver contrasena"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="size-4" />
-                    ) : (
-                      <Eye className="size-4" />
-                    )}
-                  </button>
+                  {dniError && (
+                    <p className="text-xs text-destructive">{dniError}</p>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="email">Correo Electronico</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="john@example.com"
+                      value={form.email}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, email: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Contrasena</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-primary"
+                      >
+                        Olvidaste tu contrasena?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Ingresa tu contrasena"
+                        value={form.password}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, password: e.target.value }))
+                        }
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((p) => !p)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
+                        aria-label={showPassword ? "Ocultar contrasena" : "Ver contrasena"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Button type="submit" className="mt-2 w-full font-semibold" disabled={isLoading}>
                 {isLoading ? (
@@ -130,16 +201,6 @@ export default function LoginPage() {
                   "Iniciar Sesion"
                 )}
               </Button>
-
-              <p className="text-center text-sm text-muted-foreground">
-                {"No tienes una cuenta? "}
-                <Link
-                  href="/register"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Registrarse
-                </Link>
-              </p>
 
               <p className="mt-4 text-center text-xs text-muted-foreground">
                 El superadmin es cualquier usuario con role &quot;admin&quot; en la tabla profiles (Supabase). Inicia sesión con ese correo y contraseña.

@@ -23,9 +23,6 @@ export function Footer() {
           <div className="flex flex-col gap-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Enlaces Rapidos</h3>
             <div className="flex flex-col gap-2">
-              <Link href="/register" className="text-sm text-foreground/80 transition-colors hover:text-primary">
-                Registrarse
-              </Link>
               <Link href="/login" className="text-sm text-foreground/80 transition-colors hover:text-primary">
                 Iniciar Sesion
               </Link>
