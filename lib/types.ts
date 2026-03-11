@@ -1,13 +1,25 @@
 export interface User {
   id: string
+  /** Datos personales básicos */
   firstName: string
   lastName: string
   email: string
   phone: string
+  avatarUrl?: string
+
+  /** Campos de gestión del gimnasio / migración */
+  numeroSocio?: string | null
+  dni?: string | null
+  direccion?: string | null
+  localidad?: string | null
+  provincia?: string | null
+  fechaNacimiento?: string | null
+  fechaIngreso?: string | null
+
+  /** Rol y estado dentro del sistema */
   role: "member" | "admin" | "superadmin"
   membershipStatus: "active" | "inactive"
   joinDate: string
-  avatarUrl?: string
 }
 
 export interface RegisterData {
@@ -30,6 +42,7 @@ export interface Plan {
   priceCents: number
   currency: string
   interval: "month" | "year"
+  durationDays: number
   active: boolean
 }
 

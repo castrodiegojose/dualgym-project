@@ -19,6 +19,8 @@ interface AuthContextType {
   /** False hasta terminar la primera comprobación de sesión (evita redirigir a login antes de saber si hay sesión). */
   isSessionReady: boolean
   login: (data: LoginData) => Promise<{ success: boolean; error?: string }>
+  /** Login para socios usando solo DNI (sin Supabase Auth). */
+  loginSocio: (dni: string) => Promise<{ success: boolean; error?: string }>
   register: (data: RegisterData) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   updateProfile: (data: Partial<User>) => Promise<{ success: boolean; error?: string }>
@@ -96,6 +98,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const loginSocio = useCallback(async (dni: string) => {
+    setIsLoading(true)
+    try {
+      const res = await fetch("/api/auth/login-socio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dni }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        return {
+          success: false,
+          error: data.error || "No se pudo iniciar sesión",
+        }
+      }
+
+      const socioUser: User = {
+        id: data.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email ?? "",
+        phone: data.phone || "",
+        avatarUrl: undefined,
+        numeroSocio: data.numeroSocio ?? null,
+        dni: data.dni ?? dni,
+        direccion: data.direccion ?? null,
+        localidad: data.localidad ?? null,
+        provincia: data.provincia ?? null,
+        fechaNacimiento: null,
+        fechaIngreso: data.fechaIngreso ?? null,
+        role: "member",
+        membershipStatus: "inactive",
+        joinDate: data.fechaIngreso ?? new Date().toISOString().split("T")[0],
+      }
+
+      setUser(socioUser)
+      return { success: true }
+    } catch (err) {
+      return {
+        success: false,
+        error:
+          err instanceof Error ? err.message : "Error al conectar. Revisa tu red e intenta de nuevo.",
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   const refreshSession = useCallback(async () => {
     const u = await getCurrentUserFromSession()
     setUser(u ?? null)
@@ -152,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isSessionReady,
         login,
+        loginSocio,
         register,
         logout,
         updateProfile,
