@@ -168,50 +168,132 @@ export async function createAdminUser(params: {
   return { success: true }
 }
 
+/** Obtiene el siguiente número de socio disponible (no existente en BD). Formato "001", "002", ... */
+async function getNextNumeroSocio(): Promise<string> {
+  const { data: rows, error } = await supabase
+    .from("profiles")
+    .select("numero_socio")
+    .not("numero_socio", "is", null)
+
+  if (error) return "001"
+
+  const numericValues = (rows ?? [])
+    .map((r) => r.numero_socio)
+    .filter((v): v is string => typeof v === "string" && /^\d+$/.test(v))
+    .map((v) => parseInt(v, 10))
+
+  const max = numericValues.length > 0 ? Math.max(...numericValues) : 0
+  let candidate = max + 1
+
+  // Asegurar que el número no exista (por si hay valores no numéricos o huecos)
+  for (let i = 0; i < 1000; i++) {
+    const formatted = String(candidate).padStart(3, "0")
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("numero_socio", formatted)
+      .maybeSingle()
+    if (!existing) return formatted
+    candidate++
+  }
+
+  return String(candidate).padStart(3, "0")
+}
+
 export async function createMember(params: {
+  email: string
   numeroSocio?: string | null
   dni: string
   firstName: string
   lastName: string
-  telefono?: string | null
-  celular?: string | null
+  phone?: string | null
   direccion?: string | null
   localidad?: string | null
   provincia?: string | null
+  fechaNacimiento?: string | null
   fechaIngreso?: string | null
-}): Promise<{ success: boolean; error?: string }> {
-  const { data: existing, error: existingError } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("dni", params.dni.trim())
-    .maybeSingle()
+}): Promise<{ success: boolean; error?: string; profileId?: string }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const token = session?.access_token
 
-  if (existingError) {
-    return { success: false, error: existingError.message }
-  }
-  if (existing) {
-    return { success: false, error: "Ya existe un miembro con este DNI." }
+  if (!token) {
+    return { success: false, error: "Debes iniciar sesión para agregar miembros." }
   }
 
-  const { error: insertError } = await supabase.from("profiles").insert({
-    numero_socio: params.numeroSocio ?? null,
-    dni: params.dni.trim(),
-    first_name: params.firstName.trim(),
-    last_name: params.lastName.trim(),
-    phone: params.telefono ?? params.celular ?? null,
-    direccion: params.direccion ?? null,
-    localidad: params.localidad ?? null,
-    provincia: params.provincia ?? null,
-    fecha_ingreso: params.fechaIngreso ?? new Date().toISOString().split("T")[0],
-    role: "member",
-    membership_status: "inactive",
+  const base =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL ?? ""
+
+  const res = await fetch(`${base}/api/admin/create-member`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      email: params.email.trim(),
+      numeroSocio: params.numeroSocio,
+      dni: params.dni.trim(),
+      firstName: params.firstName.trim(),
+      lastName: params.lastName.trim(),
+      phone: params.phone ?? null,
+      direccion: params.direccion ?? null,
+      localidad: params.localidad ?? null,
+      provincia: params.provincia ?? null,
+      fechaNacimiento: params.fechaNacimiento ?? null,
+      fechaIngreso: params.fechaIngreso ?? null,
+    }),
   })
 
-  if (insertError) {
-    return { success: false, error: insertError.message }
+  const data = (await res.json()) as {
+    success: boolean
+    error?: string
+    profileId?: string
   }
 
-  return { success: true }
+  if (!res.ok) {
+    return { success: false, error: data.error ?? "Error al crear el miembro." }
+  }
+
+  return { success: data.success, profileId: data.profileId, error: data.error }
+}
+
+export async function deleteUserById(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const token = session?.access_token
+
+  if (!token) {
+    return { success: false, error: "Debes iniciar sesión para eliminar usuarios." }
+  }
+
+  const base =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL ?? ""
+
+  const res = await fetch(`${base}/api/admin/delete-member`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId: id }),
+  })
+
+  const data = (await res.json()) as { success: boolean; error?: string }
+
+  if (!res.ok) {
+    return { success: false, error: data.error ?? "Error al eliminar el usuario." }
+  }
+
+  return { success: data.success, error: data.error }
 }
 
 type ProfileRow = {
@@ -340,6 +422,53 @@ export async function getAllUsers(): Promise<User[]> {
   return (data ?? []).map(profileToUser)
 }
 
+export async function getUsersPage(params: {
+  page: number
+  pageSize: number
+}): Promise<{ users: User[]; total: number }> {
+  const page = Math.max(1, params.page)
+  const pageSize = Math.max(1, params.pageSize)
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  const { data, error, count } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to)
+
+  if (error) throw error
+  return {
+    users: (data ?? []).map(profileToUser),
+    total: count ?? 0,
+  }
+}
+
+export async function getUserStats(): Promise<{
+  total: number
+  active: number
+  inactive: number
+}> {
+  const [totalRes, activeRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("membership_status", "active"),
+  ])
+
+  if (totalRes.error) throw totalRes.error
+  if (activeRes.error) throw activeRes.error
+
+  const total = totalRes.count ?? 0
+  const active = activeRes.count ?? 0
+  const inactive = Math.max(0, total - active)
+
+  return { total, active, inactive }
+}
+
 export async function getUserById(id: string): Promise<User | null> {
   const { data, error } = await supabase
     .from("profiles")
@@ -361,6 +490,7 @@ type PlanRow = {
   price_cents: number
   currency: string
   interval: string
+  duration_days: number
   active: boolean
   [key: string]: unknown
 }
@@ -373,6 +503,7 @@ function planRowToPlan(row: PlanRow): Plan {
     priceCents: row.price_cents,
     currency: row.currency,
     interval: row.interval === "year" ? "year" : "month",
+    durationDays: row.duration_days ?? 30,
     active: row.active,
   }
 }

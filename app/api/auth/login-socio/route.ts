@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(request: Request) {
   const { dni } = (await request.json().catch(() => ({}))) as { dni?: string }
@@ -14,13 +15,20 @@ export async function POST(request: Request) {
     )
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
+  // Usamos service role para evitar que RLS bloquee la lectura por DNI.
+  // (Login de socio NO tiene JWT todavía.)
+  const keyToUse = serviceRoleKey ?? supabaseAnonKey
+  const supabase = createClient(supabaseUrl, keyToUse, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("dni", dni.trim())
     .maybeSingle()
+
+  console.log(profile)
 
   if (error) {
     return NextResponse.json(
@@ -45,11 +53,11 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     id: profile.id,
+    email: profile.email ?? "",
     dni: profile.dni,
     firstName: profile.first_name ?? "",
     lastName: profile.last_name ?? "",
-    telefono: profile.telefono ?? "",
-    celular: profile.celular ?? "",
+    phone: profile.phone ?? "",
     direccion: profile.direccion ?? "",
     localidad: profile.localidad ?? "",
     provincia: profile.provincia ?? "",

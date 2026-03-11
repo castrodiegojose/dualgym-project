@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formSchemaMemberDni } from "@/lib/validations"
 import { Dumbbell, Eye, EyeOff, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const { login, loginSocio, isLoading, isAuthenticated, isSessionReady } = useAuth()
   const router = useRouter()
   const [error, setError] = useState("")
+  const [dniError, setDniError] = useState<string | null>(null)
   const [modo, setModo] = useState<"socio" | "admin">("socio")
   const [dni, setDni] = useState("")
   const [form, setForm] = useState({ email: "", password: "" })
@@ -34,11 +36,20 @@ export default function LoginPage() {
     e.preventDefault()
     setError("")
     if (modo === "socio") {
+      setDniError(null)
       if (!dni.trim()) {
         setError("Ingresa tu DNI")
         return
       }
-      const result = await loginSocio(dni.trim())
+      const dniResult = formSchemaMemberDni.safeParse({ dni: dni.trim() })
+      console.log(dniResult)
+      if (!dniResult.success) {
+        const msg = dniResult.error.errors[0]?.message ?? "DNI inválido."
+        setDniError(msg)
+        setError(msg)
+        return
+      }
+      const result = await loginSocio(dniResult.data.dni)
       if (result.success) {
         router.replace("/dashboard")
         router.refresh()
@@ -91,14 +102,14 @@ export default function LoginPage() {
               <div className="flex rounded-lg border border-border/50 bg-muted/40 p-1 text-xs font-medium">
                 <button
                   type="button"
-                  onClick={() => { setModo("socio"); setError("") }}
+                  onClick={() => { setModo("socio"); setError(""); setDniError(null) }}
                   className={`flex-1 rounded-md px-3 py-2 ${modo === "socio" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
                 >
                   Ingresar como socio
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setModo("admin"); setError("") }}
+                  onClick={() => { setModo("admin"); setError(""); setDniError(null) }}
                   className={`flex-1 rounded-md px-3 py-2 ${modo === "admin" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
                 >
                   Ingresar como administrador
@@ -112,10 +123,20 @@ export default function LoginPage() {
                     id="dni"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    placeholder="Ingresa tu DNI"
+                    placeholder="7 u 8 dígitos"
                     value={dni}
-                    onChange={(e) => setDni(e.target.value)}
+                    onChange={(e) => {
+                      setDni(e.target.value)
+                      if (dniError) setDniError(null)
+                      if (error) setError("")
+                    }}
+                    maxLength={8}
+                    className={dniError ? "border-destructive" : undefined}
+                    autoComplete="off"
                   />
+                  {dniError && (
+                    <p className="text-xs text-destructive">{dniError}</p>
+                  )}
                 </div>
               ) : (
                 <>

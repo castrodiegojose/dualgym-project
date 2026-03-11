@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { AuthGuard } from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
@@ -10,13 +10,17 @@ import { useAuth } from "@/lib/auth-context"
 import {
   getUserById,
   updateUser,
+  deleteUserById,
   getPlans,
   getSubscriptionsByProfileId,
   getPaymentsByProfileId,
   createSubscription,
+  updateSubscription,
   createPayment,
 } from "@/lib/api"
 import type { User, Plan, Subscription, Payment } from "@/lib/types"
+import { addDaysToDate } from "@/lib/utils"
+import { formSchemaMemberDni } from "@/lib/validations"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -60,6 +64,7 @@ const ROLE_OPTIONS = [
 function AdminUserProfileContent() {
   const params = useParams()
   const userId = typeof params.id === "string" ? params.id : ""
+  const router = useRouter()
   const { user: authUser } = useAuth()
 
   const [user, setUser] = useState<User | null>(null)
@@ -69,18 +74,27 @@ function AdminUserProfileContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Form: user info (nombre, teléfono y rol editables para superadmin)
+  // Form: user info (todos los campos editables del perfil)
   const [editFirstName, setEditFirstName] = useState("")
   const [editLastName, setEditLastName] = useState("")
   const [editPhone, setEditPhone] = useState("")
+  const [editNumeroSocio, setEditNumeroSocio] = useState("")
+  const [editDni, setEditDni] = useState("")
+  const [editDireccion, setEditDireccion] = useState("")
+  const [editLocalidad, setEditLocalidad] = useState("")
+  const [editProvincia, setEditProvincia] = useState("")
+  const [editFechaNacimiento, setEditFechaNacimiento] = useState("")
+  const [editFechaIngreso, setEditFechaIngreso] = useState("")
   const [editRole, setEditRole] = useState<User["role"]>("member")
   const [savingUser, setSavingUser] = useState(false)
   const [userMessage, setUserMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [dniError, setDniError] = useState<string | null>(null)
 
-  // Form: new subscription
+  // Form: nueva o actualización de membresía
   const [subPlanId, setSubPlanId] = useState("")
   const [subStartDate, setSubStartDate] = useState("")
   const [subEndDate, setSubEndDate] = useState("")
+  const [membershipFormMode, setMembershipFormMode] = useState<"edit" | "create">("create")
   const [savingSub, setSavingSub] = useState(false)
   const [subMessage, setSubMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
@@ -90,6 +104,7 @@ function AdminUserProfileContent() {
   const [payMethod, setPayMethod] = useState<string>("efectivo")
   const [payNotes, setPayNotes] = useState("")
   const [savingPayment, setSavingPayment] = useState(false)
+  const [deletingUser, setDeletingUser] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!userId) return
@@ -110,6 +125,13 @@ function AdminUserProfileContent() {
       setEditFirstName(userRes.firstName)
       setEditLastName(userRes.lastName)
       setEditPhone(userRes.phone ?? "")
+      setEditNumeroSocio(userRes.numeroSocio ?? "")
+      setEditDni(userRes.dni ?? "")
+      setEditDireccion(userRes.direccion ?? "")
+      setEditLocalidad(userRes.localidad ?? "")
+      setEditProvincia(userRes.provincia ?? "")
+      setEditFechaNacimiento(userRes.fechaNacimiento ?? "")
+      setEditFechaIngreso(userRes.fechaIngreso ?? "")
       setEditRole(userRes.role)
       setPlans(plansRes)
       setSubscriptions(subsRes)
@@ -125,15 +147,59 @@ function AdminUserProfileContent() {
     loadData()
   }, [loadData])
 
+  // Prellenar formulario de membresía si ya tiene una (modo actualizar)
+  useEffect(() => {
+    if (subscriptions.length > 0 && plans.length > 0) {
+      const first = subscriptions[0]
+      setSubPlanId(first.planId)
+      setSubStartDate(first.currentPeriodStart ?? "")
+      setMembershipFormMode("edit")
+    } else {
+      setSubPlanId("")
+      setSubStartDate("")
+      setSubEndDate("")
+      setMembershipFormMode("create")
+    }
+  }, [subscriptions, plans])
+
+  // Calcular fecha fin de membresía según plan.durationDays
+  useEffect(() => {
+    if (!subPlanId || !subStartDate) {
+      if (!subPlanId && !subStartDate) setSubEndDate("")
+      return
+    }
+    const plan = plans.find((p) => p.id === subPlanId)
+    if (!plan) return
+    const days = plan.durationDays ?? 30
+    setSubEndDate(addDaysToDate(subStartDate, days))
+  }, [subPlanId, subStartDate, plans])
+
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
+    setDniError(null)
+    const dniTrimmed = editDni.trim()
+    if (dniTrimmed) {
+      const dniResult = formSchemaMemberDni.safeParse({ dni: dniTrimmed })
+      if (!dniResult.success) {
+        const msg = dniResult.error.errors[0]?.message ?? "DNI inválido."
+        setDniError(msg)
+        return
+      }
+    }
     setSavingUser(true)
     setUserMessage(null)
     const payload: Parameters<typeof updateUser>[1] = {
       firstName: editFirstName.trim(),
       lastName: editLastName.trim(),
       phone: editPhone.trim() || undefined,
+      numeroSocio: editNumeroSocio.trim() || undefined,
+      dni: dniTrimmed || undefined,
+      direccion: editDireccion.trim() || undefined,
+      localidad: editLocalidad.trim() || undefined,
+      provincia: editProvincia.trim() || undefined,
+      fechaNacimiento: editFechaNacimiento.trim() || undefined,
+      fechaIngreso: editFechaIngreso.trim() || undefined,
     }
     if (authUser?.role === "superadmin" && authUser.id !== user.id) {
       payload.role = editRole
@@ -143,6 +209,13 @@ function AdminUserProfileContent() {
     if (result.success && result.user) {
       setUser(result.user)
       setEditRole(result.user.role)
+      setEditNumeroSocio(result.user.numeroSocio ?? "")
+      setEditDni(result.user.dni ?? "")
+      setEditDireccion(result.user.direccion ?? "")
+      setEditLocalidad(result.user.localidad ?? "")
+      setEditProvincia(result.user.provincia ?? "")
+      setEditFechaNacimiento(result.user.fechaNacimiento ?? "")
+      setEditFechaIngreso(result.user.fechaIngreso ?? "")
       setUserMessage({ type: "success", text: "Cambios guardados." })
     } else {
       setUserMessage({ type: "error", text: result.error ?? "Error al guardar" })
@@ -157,22 +230,68 @@ function AdminUserProfileContent() {
     }
     setSavingSub(true)
     setSubMessage(null)
-    const result = await createSubscription({
-      profileId: userId,
-      planId: subPlanId,
-      startDate: subStartDate,
-      endDate: subEndDate,
-    })
+    const isUpdate =
+      membershipFormMode === "edit" && subscriptions.length > 0 && subscriptions[0]?.id
+    const result = isUpdate
+      ? await updateSubscription(subscriptions[0].id, {
+          planId: subPlanId,
+          startDate: subStartDate,
+          endDate: subEndDate,
+        })
+      : await createSubscription({
+          profileId: userId,
+          planId: subPlanId,
+          startDate: subStartDate,
+          endDate: subEndDate,
+        })
     setSavingSub(false)
     if (result.success) {
-      setSubMessage({ type: "success", text: "Membresía guardada." })
-      setSubPlanId("")
-      setSubStartDate("")
-      setSubEndDate("")
+      setSubMessage({
+        type: "success",
+        text: isUpdate ? "Membresía actualizada." : "Membresía creada.",
+      })
+      if (!isUpdate) {
+        setSubPlanId("")
+        setSubStartDate("")
+        setSubEndDate("")
+      }
       loadData()
     } else {
       setSubMessage({ type: "error", text: result.error ?? "Error al guardar" })
     }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!user || !authUser) return
+    if (authUser.id === user.id) {
+      setUserMessage({
+        type: "error",
+        text: "No puedes eliminar tu propio usuario.",
+      })
+      return
+    }
+    const confirmDelete = window.confirm(
+      "¿Seguro que deseas eliminar este usuario? Esta acción no se puede deshacer."
+    )
+    if (!confirmDelete) return
+    setDeletingUser(true)
+    const result = await deleteUserById(user.id)
+    setDeletingUser(false)
+    if (!result.success) {
+      setUserMessage({
+        type: "error",
+        text: result.error ?? "No se pudo eliminar el usuario.",
+      })
+      return
+    }
+    router.replace("/admin")
+  }
+  const handleSwitchToNewMembership = () => {
+    setMembershipFormMode("create")
+    setSubPlanId("")
+    setSubStartDate("")
+    setSubEndDate("")
+    setSubMessage(null)
   }
 
   const handleAddPayment = async (e: React.FormEvent) => {
@@ -253,7 +372,7 @@ function AdminUserProfileContent() {
           <Card className="mb-6 border-border/50">
             <CardHeader>
               <CardTitle>Información del Usuario</CardTitle>
-              <CardDescription>Datos personales. Nombre y teléfono editables.</CardDescription>
+              <CardDescription>Datos personales editables del perfil.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaveUser} className="flex flex-col gap-4">
@@ -281,13 +400,92 @@ function AdminUserProfileContent() {
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" value={user.email} disabled className="bg-muted" />
                 </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono</Label>
+                    <Input
+                      id="phone"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="Teléfono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="numeroSocio">Número de socio</Label>
+                    <Input
+                      id="numeroSocio"
+                      value={editNumeroSocio}
+                      onChange={(e) => setEditNumeroSocio(e.target.value)}
+                      placeholder="Ej. 001"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="dni">DNI</Label>
+                    <Input
+                      id="dni"
+                      value={editDni}
+                      onChange={(e) => {
+                        setEditDni(e.target.value)
+                        if (dniError) setDniError(null)
+                      }}
+                      placeholder="7 u 8 dígitos"
+                      className={dniError ? "border-destructive" : undefined}
+                      maxLength={8}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                    {dniError && (
+                      <p className="text-xs text-destructive">{dniError}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaNacimiento">Fecha de nacimiento</Label>
+                    <Input
+                      id="fechaNacimiento"
+                      type="date"
+                      value={editFechaNacimiento}
+                      onChange={(e) => setEditFechaNacimiento(e.target.value)}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Teléfono</Label>
+                  <Label htmlFor="direccion">Dirección</Label>
                   <Input
-                    id="phone"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    placeholder="Teléfono"
+                    id="direccion"
+                    value={editDireccion}
+                    onChange={(e) => setEditDireccion(e.target.value)}
+                    placeholder="Calle, número"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="localidad">Localidad</Label>
+                    <Input
+                      id="localidad"
+                      value={editLocalidad}
+                      onChange={(e) => setEditLocalidad(e.target.value)}
+                      placeholder="Localidad"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="provincia">Provincia</Label>
+                    <Input
+                      id="provincia"
+                      value={editProvincia}
+                      onChange={(e) => setEditProvincia(e.target.value)}
+                      placeholder="Provincia"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fechaIngreso">Fecha de ingreso</Label>
+                  <Input
+                    id="fechaIngreso"
+                    type="date"
+                    value={editFechaIngreso}
+                    onChange={(e) => setEditFechaIngreso(e.target.value)}
                   />
                 </div>
                 {authUser?.role === "superadmin" && (
@@ -333,16 +531,32 @@ function AdminUserProfileContent() {
                     {userMessage.text}
                   </p>
                 )}
-                <Button type="submit" disabled={savingUser} className="gap-2">
-                  {savingUser ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Save className="size-4" />
-                      <span>Guardar cambios</span>
-                    </>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="submit" disabled={savingUser} className="gap-2">
+                    {savingUser ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Save className="size-4" />
+                        <span>Guardar cambios</span>
+                      </>
+                    )}
+                  </Button>
+                  {authUser?.role && authUser.role !== "member" && authUser.id !== user.id && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={deletingUser}
+                      onClick={handleDeleteUser}
+                    >
+                      {deletingUser ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        "Eliminar usuario"
+                      )}
+                    </Button>
                   )}
-                </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -351,13 +565,19 @@ function AdminUserProfileContent() {
           <Card className="mb-6 border-border/50">
             <CardHeader>
               <CardTitle>Gestión de Membresía</CardTitle>
-              <CardDescription>Membresías actuales y nueva suscripción.</CardDescription>
+              <CardDescription>
+                {subscriptions.length > 0
+                  ? membershipFormMode === "edit"
+                    ? "Actualiza la membresía actual o crea una nueva."
+                    : "Crear una nueva membresía para este usuario."
+                  : "El usuario no tiene membresía. Crea una nueva."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {subscriptions.length > 0 && (
                 <div className="mb-6 rounded-lg border border-border/50 bg-muted/30 p-4">
                   <p className="mb-2 text-sm font-medium text-muted-foreground">
-                    Membresía actual
+                    Membresías
                   </p>
                   <ul className="space-y-1 text-sm">
                     {subscriptions.slice(0, 3).map((s) => (
@@ -410,8 +630,13 @@ function AdminUserProfileContent() {
                       id="subEnd"
                       type="date"
                       value={subEndDate}
-                      onChange={(e) => setSubEndDate(e.target.value)}
+                      readOnly
+                      className="bg-muted"
+                      title="Se calcula automáticamente según el plan (mensual o anual)"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Calculada según el plan seleccionado
+                    </p>
                   </div>
                 </div>
                 {subMessage && (
@@ -425,13 +650,26 @@ function AdminUserProfileContent() {
                     {subMessage.text}
                   </p>
                 )}
-                <Button type="submit" disabled={savingSub}>
-                  {savingSub ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    "Guardar la membresía"
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="submit" disabled={savingSub}>
+                    {savingSub ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : membershipFormMode === "edit" && subscriptions.length > 0 ? (
+                      "Actualizar membresía"
+                    ) : (
+                      "Crear membresía"
+                    )}
+                  </Button>
+                  {subscriptions.length > 0 && membershipFormMode === "edit" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSwitchToNewMembership}
+                    >
+                      Crear nueva membresía
+                    </Button>
                   )}
-                </Button>
+                </div>
               </form>
             </CardContent>
           </Card>

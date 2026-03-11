@@ -42,6 +42,7 @@ export interface Plan {
   priceCents: number
   currency: string
   interval: "month" | "year"
+  durationDays: number
   active: boolean
 }
 
