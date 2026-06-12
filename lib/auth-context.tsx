@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fechaNacimiento: null,
         fechaIngreso: data.fechaIngreso ?? null,
         role: "member",
-        membershipStatus: "inactive",
+        membershipStatus: data.membershipStatus ?? "inactive",
         joinDate: data.fechaIngreso ?? new Date().toISOString().split("T")[0],
       }
 

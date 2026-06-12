@@ -11,3 +11,5 @@ node_modules/
 
 #Ignore cursor AI rules
 .cursor/rules/codacy.mdc
+.cursor/mcp.json
+supabase/seed/generated_import/
