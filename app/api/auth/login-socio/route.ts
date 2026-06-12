@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     id: profile.id,
     email: profile.email ?? "",
     dni: profile.dni,
+    numeroSocio: profile.numero_socio ?? null,
     firstName: profile.first_name ?? "",
     lastName: profile.last_name ?? "",
     phone: profile.phone ?? "",
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     localidad: profile.localidad ?? "",
     provincia: profile.provincia ?? "",
     fechaIngreso: profile.fecha_ingreso ?? null,
+    membershipStatus: profile.membership_status ?? "inactive",
   })
 }
 
